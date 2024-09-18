@@ -1,0 +1,671 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: OpenEMR Cloud Standard v7.0.2 cloud deployment
+Mappings:
+  RegionData:
+    ap-northeast-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-069213e61171ce9d7
+    ap-northeast-2:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0c73c685ea7f2a361
+    af-south-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0d1d88018ef225510
+    ap-southeast-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-02b637b564e3c5c81
+    ap-southeast-2:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-001eb5c731f8e6cf5
+    ca-central-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-024d32ab346588305
+    eu-central-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-010ee8cef54e54563
+    eu-west-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0cac38cd49054c945
+    eu-west-2:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-01bd13a2e8b3d7616
+    eu-west-3:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0172ad9869fc529f0
+    eu-north-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0507b60f2dbda5cf3
+    eu-south-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-01f673bac0ff397ad
+    sa-east-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-09cbf7e968f95efea
+    me-south-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-010c71ec709c47400
+    ap-east-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-025698f3e057ad033
+    ap-south-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0a85920b0c3670e5e
+    us-east-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-09739bd4828121853
+    us-east-2:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-08bf8288f0b01f38f
+    us-west-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-008513753d4bffd13
+    us-west-2:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0cdd3db040fcb8c66
+    us-gov-east-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-0de4e1afc1016ed8c
+    us-gov-west-1:
+      MySQLVersion: 8.0.36
+      OpenEMRMktPlaceAMI: ami-00064f4c7e501e4d6
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Credentials and Passwords
+        Parameters:
+          - AdminPassword
+          - RDSPassword
+          - EC2KeyPair
+      - Label:
+          default: Size and Capacity
+        Parameters:
+          - WebserverInstanceSize
+          - PracticeStorage
+          - RDSInstanceSize
+          - PatientRecords
+      - Label:
+          default: Network Settings
+        Parameters:
+          - UserCidr
+          - UserSubnetPublic1
+          - UserSubnetPrivate1
+          - UserSubnetPublic2
+          - UserSubnetPrivate2
+    ParameterLabels:
+      AdminPassword:
+        default: Pick a strong password for your OpenEMR administrator account.
+      EC2KeyPair:
+        default: Your EC2 SSH key for connecting to OpenEMRs shell.
+      PatientRecords:
+        default: How much database space should we reserve for patient records?
+      PracticeStorage:
+        default: How much space should we reserve for patient documents?
+      RDSInstanceSize:
+        default: How powerful should our database be?
+      RDSPassword:
+        default: Pick a strong password for your MySQL administrator account.
+      UserCidr:
+        default: Enter a valid CIDR for the OpenEMR VPC
+      UserSubnetPrivate1:
+        default: Add the first private subnet to the VPC
+      UserSubnetPrivate2:
+        default: Add the second private subnet to the VPC
+      UserSubnetPublic1:
+        default: Add the first public subnet to the VPC
+      UserSubnetPublic2:
+        default: Add the second public subnet to the VPC
+      WebserverInstanceSize:
+        default: What size webserver should we create in EC2?
+Outputs:
+  OpenEMRURL:
+    Description: OpenEMR Installation
+    Value: !Join
+      - ''
+      - - http://
+        - !GetAtt WebserverInstance.PublicIp
+        - /
+Parameters:
+  AdminPassword:
+    AllowedPattern: '[A-Za-z0-9/!@#%:_,\.\^\-\+]+'
+    ConstraintDescription: password must contain only letters, numbers, and /!@#%:_,.^-+
+    Description: The OpenEMR admin account password
+    MaxLength: '41'
+    MinLength: '8'
+    NoEcho: true
+    Type: String
+  EC2KeyPair:
+    Description: Amazon EC2 Key Pair
+    Type: AWS::EC2::KeyPair::KeyName
+  PatientRecords:
+    Default: '10'
+    Description: Database storage for patient records (minimum 10 GB)
+    MinValue: '10'
+    Type: Number
+  PracticeStorage:
+    Default: '10'
+    Description: Storage for the OpenEMR practice (minimum 10 GB)
+    MinValue: '10'
+    Type: Number
+  RDSInstanceSize:
+    AllowedValues:
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.t3.xlarge
+      - db.t3.2xlarge
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+    Default: db.t3.small
+    Description: RDS instance size for the back-end database
+    Type: String
+  RDSPassword:
+    AllowedPattern: '[A-Za-z0-9/!@#%:_,\.\^\-\+]+'
+    ConstraintDescription: password must contain only letters, numbers, and /!@#%:_,.^-+
+    Description: The database admin account password
+    MaxLength: '41'
+    MinLength: '8'
+    NoEcho: true
+    Type: String
+  UserCidr:
+    AllowedPattern: '[0-9/\.]+'
+    ConstraintDescription: must be a valid CIDR
+    Default: 10.0.0.0/16
+    Description: VPC CIDR block
+    Type: String
+  UserSubnetPrivate1:
+    AllowedPattern: '[0-9/\.]+'
+    ConstraintDescription: must be a valid CIDR
+    Default: 10.0.2.0/24
+    Description: 'Private Subnet (AZ #1)'
+    Type: String
+  UserSubnetPrivate2:
+    AllowedPattern: '[0-9/\.]+'
+    ConstraintDescription: must be a valid CIDR
+    Default: 10.0.4.0/24
+    Description: 'Private Subnet (AZ #2)'
+    Type: String
+  UserSubnetPublic1:
+    AllowedPattern: '[0-9/\.]+'
+    ConstraintDescription: must be a valid CIDR
+    Default: 10.0.1.0/24
+    Description: 'Public Subnet (AZ #1)'
+    Type: String
+  UserSubnetPublic2:
+    AllowedPattern: '[0-9/\.]+'
+    ConstraintDescription: must be a valid CIDR
+    Default: 10.0.3.0/24
+    Description: 'Public Subnet (AZ #2)'
+    Type: String
+  WebserverInstanceSize:
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+      - m6a.large
+      - m6a.xlarge
+      - m6a.2xlarge
+      - m6a.4xlarge
+      - m6i.large
+      - m6i.xlarge
+      - m6i.2xlarge
+      - m6i.4xlarge
+      - c6a.large
+      - c6a.xlarge
+      - c6a.2xlarge
+      - c6a.4xlarge
+      - c6i.large
+      - c6i.xlarge
+      - c6i.2xlarge
+      - c6i.4xlarge
+    Default: t3.small
+    Description: EC2 instance size for the webserver
+    Type: String
+Resources:
+  ApplicationSecurityGroup:
+    Properties:
+      GroupDescription: Application Security Group
+      Tags:
+        - Key: Name
+          Value: Application
+      VpcId: !Ref VPC
+    Type: AWS::EC2::SecurityGroup
+  BucketPolicy:
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+            Sid: AWSCloudTrailAclCheck
+          - Action: s3:PutObject
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Resource: !Join
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /AWSLogs/
+                - !Ref AWS::AccountId
+                - /*
+            Sid: AWSCloudTrailWrite
+        Version: '2012-10-17'
+    Type: AWS::S3::BucketPolicy
+  CloudTrail:
+    DependsOn: BucketPolicy
+    Properties:
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref S3Bucket
+    Type: AWS::CloudTrail::Trail
+  DBSGIngress:
+    Properties:
+      GroupId: !Ref DBSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+    Type: AWS::EC2::SecurityGroupIngress
+  DBSecurityGroup:
+    Properties:
+      GroupDescription: Patient Records
+      Tags:
+        - Key: Name
+          Value: MySQL Access
+      VpcId: !Ref VPC
+    Type: AWS::EC2::SecurityGroup
+  DockerVolume:
+    DeletionPolicy: Snapshot
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs ''
+      Encrypted: true
+      KmsKeyId: !Ref OpenEMRKey
+      Size: !Ref PracticeStorage
+      Tags:
+        - Key: Name
+          Value: OpenEMR Practice
+      VolumeType: gp2
+    Type: AWS::EC2::Volume
+  OpenEMRKey:
+    DeletionPolicy: Retain
+    Properties:
+      KeyPolicy:
+        Id: key-default-1
+        Statement:
+          - Action: kms:*
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Join
+                  - ':'
+                  - - 'arn:aws:iam:'
+                    - !Ref AWS::AccountId
+                    - root
+            Resource: '*'
+            Sid: '1'
+        Version: '2012-10-17'
+    Type: AWS::KMS::Key
+  PrivateSubnet1:
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs ''
+      CidrBlock: !Ref UserSubnetPrivate1
+      VpcId: !Ref VPC
+    Type: AWS::EC2::Subnet
+  PrivateSubnet2:
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !GetAZs ''
+      CidrBlock: !Ref UserSubnetPrivate2
+      VpcId: !Ref VPC
+    Type: AWS::EC2::Subnet
+  PublicSubnet1:
+    Properties:
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs ''
+      CidrBlock: !Ref UserSubnetPublic1
+      VpcId: !Ref VPC
+    Type: AWS::EC2::Subnet
+  PublicSubnet2:
+    Properties:
+      AvailabilityZone: !Select
+        - '1'
+        - !GetAZs ''
+      CidrBlock: !Ref UserSubnetPublic2
+      VpcId: !Ref VPC
+    Type: AWS::EC2::Subnet
+  RDSInstance:
+    DeletionPolicy: Snapshot
+    Properties:
+      AllocatedStorage: !Ref PatientRecords
+      DBInstanceClass: !Ref RDSInstanceSize
+      DBName: openemr
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      Engine: MySQL
+      EngineVersion: !FindInMap
+        - RegionData
+        - !Ref AWS::Region
+        - MySQLVersion
+      KmsKeyId: !Ref OpenEMRKey
+      MasterUserPassword: !Ref RDSPassword
+      MasterUsername: openemr
+      MultiAZ: true
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: Patient Records
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+    Type: AWS::RDS::DBInstance
+  RDSSubnetGroup:
+    Properties:
+      DBSubnetGroupDescription: MySQL node locations
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+    Type: AWS::RDS::DBSubnetGroup
+  S3Bucket:
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Join
+        - '-'
+        - - openemr
+          - !Select
+            - '2'
+            - !Split
+              - /
+              - !Ref AWS::StackId
+    Type: AWS::S3::Bucket
+  SysAdminAccessSG:
+    Properties:
+      GroupDescription: System Administrator Access
+      Tags:
+        - Key: Name
+          Value: System Administrator Access
+      VpcId: !Ref VPC
+    Type: AWS::EC2::SecurityGroup
+  VPC:
+    Properties:
+      CidrBlock: !Ref UserCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+    Type: AWS::EC2::VPC
+  WebserverIngress443:
+    Properties:
+      CidrIp: 0.0.0.0/0
+      FromPort: 443
+      GroupId: !Ref WebserverIngressSG
+      IpProtocol: tcp
+      ToPort: 443
+    Type: AWS::EC2::SecurityGroupIngress
+  WebserverIngressSG:
+    Properties:
+      GroupDescription: Global Webserver Access
+      Tags:
+        - Key: Name
+          Value: Global Webserver Access
+      VpcId: !Ref VPC
+    Type: AWS::EC2::SecurityGroup
+  WebserverIngressSG80:
+    Properties:
+      CidrIp: 0.0.0.0/0
+      FromPort: 80
+      GroupId: !Ref WebserverIngressSG
+      IpProtocol: tcp
+      ToPort: 80
+    Type: AWS::EC2::SecurityGroupIngress
+  WebserverInstance:
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        Install:
+          commands:
+            01_setup:
+              command: /root/cloud-setup.sh
+          files:
+            /root/cloud-setup.sh:
+              content: !Join
+                - ''
+                - - |
+                    #!/bin/bash -xe
+                  - |
+                    exec > /tmp/cloud-setup.log 2>&1
+                  - |
+                    /root/openemr-devops/packages/standard/ami/ami-configure.sh
+              group: root
+              mode: '000500'
+              owner: root
+            /root/cloud-variables:
+              content: !Join
+                - ''
+                - - S3=
+                  - !Ref S3Bucket
+                  - |+
+                  - KMS=
+                  - !Ref OpenEMRKey
+                  - |+
+                  - DVOL=
+                  - !Ref DockerVolume
+                  - |+
+              group: root
+              mode: '000500'
+              owner: root
+            /root/openemr-devops/packages/standard/docker-compose.yaml:
+              content: !Join
+                - ''
+                - - |
+                    version: '3.1'
+                  - |
+                    services:
+                  - |2
+                      openemr:
+                  - |2
+                        restart: always
+                  - '    image: openemr/openemr'
+                  - ':7.0.2'
+                  - |+
+                  - |2
+                        ports:
+                  - |2
+                        - 80:80
+                  - |2
+                        - 443:443
+                  - |2
+                        volumes:
+                  - |2
+                        - logvolume01:/var/log
+                  - |2
+                        - sitevolume:/var/www/localhost/htdocs/openemr/sites
+                  - |2
+                        environment:
+                  - '      MYSQL_HOST: '''
+                  - !GetAtt RDSInstance.Endpoint.Address
+                  - |
+                    '
+                  - |2
+                          MYSQL_ROOT_USER: openemr
+                  - '      MYSQL_ROOT_PASS: '''
+                  - !Ref RDSPassword
+                  - |
+                    '
+                  - |2
+                          MYSQL_USER: openemr
+                  - '      MYSQL_PASS: '''
+                  - !Ref RDSPassword
+                  - |
+                    '
+                  - |2
+                          OE_USER: admin
+                  - '      OE_PASS: '''
+                  - !Ref AdminPassword
+                  - |
+                    '
+                  - |2
+                          OPENEMR_DOCKER_ENV_TAG: aws-standard
+                  - |
+                    volumes:
+                  - |2
+                      logvolume01: {}
+                  - |2
+                      sitevolume: {}
+              group: root
+              mode: '000500'
+              owner: root
+        configSets:
+          Setup:
+            - Install
+    Properties:
+      IamInstanceProfile: !Ref WebserverInstanceProfile
+      ImageId: !FindInMap
+        - RegionData
+        - !Ref AWS::Region
+        - OpenEMRMktPlaceAMI
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: !Ref WebserverInstanceSize
+      KeyName: !Ref EC2KeyPair
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !Ref ApplicationSecurityGroup
+            - !Ref WebserverIngressSG
+            - !Ref SysAdminAccessSG
+          SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: OpenEMR Cloud Standard
+      UserData: 
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash -x
+            exec > /var/log/openemr-cfn-bootstrap 2>&1
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebserverInstance --configsets Setup --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebserverInstance --region ${AWS::Region}
+      Volumes:
+        - Device: /dev/sdd
+          VolumeId: !Ref DockerVolume
+    Type: AWS::EC2::Instance
+  WebserverInstanceProfile:
+    Properties:
+      Path: /
+      Roles:
+        - !Ref WebserverRole
+    Type: AWS::IAM::InstanceProfile
+  WebserverPolicy:
+    Properties:
+      Description: Policy for webserver instance
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:ListBucket
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3Bucket
+            Sid: Stmt1500699052003
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:DeleteObject
+            Effect: Allow
+            Resource:
+              - !Join
+                - ''
+                - - 'arn:aws:s3:::'
+                  - !Ref S3Bucket
+                  - /Backup/*
+            Sid: Stmt1500699052000
+          - Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+            Effect: Allow
+            Resource:
+              - !GetAtt OpenEMRKey.Arn
+            Sid: Stmt1500612724002
+        Version: '2012-10-17'
+    Type: AWS::IAM::ManagedPolicy
+  WebserverRole:
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+        Version: '2012-10-17'
+      ManagedPolicyArns:
+        - !Ref WebserverPolicy
+      Path: /
+    Type: AWS::IAM::Role
+  ig:
+    Type: AWS::EC2::InternetGateway
+  igAttach:
+    Properties:
+      InternetGatewayId: !Ref ig
+      VpcId: !Ref VPC
+    Type: AWS::EC2::VPCGatewayAttachment
+  rtPrivate1Attach:
+    Properties:
+      RouteTableId: !Ref rtTablePrivate
+      SubnetId: !Ref PrivateSubnet1
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  rtPrivate2Attach:
+    Properties:
+      RouteTableId: !Ref rtTablePrivate
+      SubnetId: !Ref PrivateSubnet2
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  rtPublic:
+    DependsOn: igAttach
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ig
+      RouteTableId: !Ref rtTablePublic
+    Type: AWS::EC2::Route
+  rtPublic1Attach:
+    Properties:
+      RouteTableId: !Ref rtTablePublic
+      SubnetId: !Ref PublicSubnet1
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  rtPublic2Attach:
+    Properties:
+      RouteTableId: !Ref rtTablePublic
+      SubnetId: !Ref PublicSubnet2
+    Type: AWS::EC2::SubnetRouteTableAssociation
+  rtTablePrivate:
+    Properties:
+      VpcId: !Ref VPC
+    Type: AWS::EC2::RouteTable
+  rtTablePublic:
+    Properties:
+      VpcId: !Ref VPC
+    Type: AWS::EC2::RouteTable
